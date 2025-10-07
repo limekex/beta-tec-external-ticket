@@ -1,1 +1,0 @@
-# beta-tec-external-ticket
