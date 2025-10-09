@@ -10,7 +10,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'BETA_TEC_EXT_VER',  '0.2.3' );
+define( 'BETA_TEC_EXT_VER',  '0.2.4' );
 define( 'BETA_TEC_EXT_FILE', __FILE__ );
 define( 'BETA_TEC_EXT_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'BETA_TEC_EXT_URL',  plugin_dir_url( __FILE__ ) );

@@ -2,6 +2,7 @@
 .git/
 .vscode/
 backup/
+Manual/
 
 
 # Ignorer node_modules-mappen

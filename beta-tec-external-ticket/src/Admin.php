@@ -29,6 +29,8 @@ class Admin {
 		// 5) Fallbacks (hvis ET faktisk poster feltene)
 		add_action( 'tribe_tickets_process_ticket', [ $this, 'save_ticket_meta_from_post' ], 10, 3 );
 		add_action( 'save_post_tec_tc_ticket', [ $this, 'fallback_save_on_ticket_save' ], 20, 3 );
+        add_action( 'event_tickets_after_save_ticket', [ $this, 'after_save_ticket' ], 10, 4 );
+
 	}
 
 	/** Registrer meta keys på tec_tc_ticket (må ha show_in_rest for noen editor-flyter) */
@@ -47,37 +49,28 @@ class Admin {
 	/** Enqueue admin JS når vi redigerer tribe_events */
 	public function enqueue_admin_assets( $hook ) {
 		$screen = function_exists('get_current_screen') ? get_current_screen() : null;
-		if ( ! $screen || $screen->id !== 'tribe_events' ) return;
+            if ( ! $screen || $screen->id !== 'tribe_events' ) return;
 
-		// Liten styling for kortet i Advanced
-		wp_add_inline_style(
-			'wp-admin',
-			'.beta-ext-card{margin-top:12px;padding:12px;border:1px solid #e2e8f0;border-radius:6px;background:#fff}'
-			.'.beta-ext-card h4{margin:0 0 8px;font-size:14px}.beta-ext-field{margin:8px 0}'
-			.'.beta-ext-field label{display:block;margin-bottom:4px;font-weight:600}.beta-ext-field input{width:100%}'
-		);
+            wp_enqueue_script(
+            'beta-tec-ext-admin',
+            BETA_TEC_EXT_URL . 'assets/admin/external-admin.js',
+            [ 'jquery' ],
+            BETA_TEC_EXT_VER,
+            true
+            );
 
-		// Admin JS for å lagre meta via AJAX når billetten lagres/oppdateres
-		wp_enqueue_script(
-			'beta-tec-ext-admin',
-			BETA_TEC_EXT_URL . 'assets/admin/external-admin.js',
-			[ 'jquery' ],
-			BETA_TEC_EXT_VER,
-			true
-		);
-
-		wp_localize_script(
-			'beta-tec-ext-admin',
-			'BETA_TEC_EXT_ADMIN',
-			[
-				'ajaxurl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( self::NONCE_ACTION ),
-				'i18n'    => [
-					'saved'   => __( 'External checkout lagret', 'beta-tec-external-ticket' ),
-					'failed'  => __( 'Kunne ikke lagre external-felt. Prøv igjen.', 'beta-tec-external-ticket' ),
-				],
-			]
-		);
+            wp_localize_script(
+            'beta-tec-ext-admin',
+            'BETA_TEC_EXT_ADMIN',
+            [
+                'ajaxurl' => admin_url( 'admin-ajax.php' ),
+                'nonce'   => wp_create_nonce( self::NONCE_ACTION ),
+                'i18n'    => [
+                'saved'  => __( 'External checkout lagret', 'beta-tec-external-ticket' ),
+                'failed' => __( 'Kunne ikke lagre external-felt. Prøv igjen.', 'beta-tec-external-ticket' ),
+                ],
+            ]
+            );
 	}
 
 	/** Felter i Event → Advanced-seksjonen (server-rendered) */
@@ -93,7 +86,7 @@ class Admin {
 		$ls = "beta_ext_label[$ticket_id]";
 
 		?>
-		<div class="beta-ext-card" data-beta-ext="container" data-ticket-id="<?php echo esc_attr( $ticket_id ); ?>">
+		<div class="beta-ext-card" data-beta-ext="container" data-ticket-id="<?php echo esc_attr( (int) $ticket_id ); ?>">
 			<h4><?php echo esc_html__( 'External checkout', 'beta-tec-external-ticket' ); ?></h4>
 			<div class="beta-ext-field">
 				<label for="beta-ext-url-<?php echo esc_attr( $ticket_id ); ?>"><?php echo esc_html__( 'External purchase URL', 'beta-tec-external-ticket' ); ?></label>
@@ -165,6 +158,33 @@ class Admin {
 			self::update_meta( $post_id, $url, $label );
 		}
 	}
+
+    public function after_save_ticket( $post_id, $ticket, $raw_data, $provider_class ) {
+	// $ticket er WP_Post (billetten) – ta id:
+	$ticket_id = is_object( $ticket ) && isset( $ticket->ID ) ? (int) $ticket->ID : (int) $ticket;
+	if ( ! $ticket_id ) {
+		return;
+	}
+
+	// Les verdier fra POST – både “eksisterende id”-navnekonvensjon og “new”
+	$url   = '';
+	$label = '';
+
+	if ( isset( $_POST['beta_ext_url'][ $ticket_id ] ) ) {
+		$url = esc_url_raw( wp_unslash( $_POST['beta_ext_url'][ $ticket_id ] ) );
+	} elseif ( isset( $_POST['beta_ext_url_new'] ) ) {
+		$url = esc_url_raw( wp_unslash( $_POST['beta_ext_url_new'] ) );
+	}
+
+	if ( isset( $_POST['beta_ext_label'][ $ticket_id ] ) ) {
+		$label = sanitize_text_field( wp_unslash( $_POST['beta_ext_label'][ $ticket_id ] ) );
+	} elseif ( isset( $_POST['beta_ext_label_new'] ) ) {
+		$label = sanitize_text_field( wp_unslash( $_POST['beta_ext_label_new'] ) );
+	}
+
+	self::update_meta( $ticket_id, (string) $url, (string) $label );
+}
+
 
 	private static function update_meta( int $ticket_id, string $url, string $label ): void {
 		if ( $url !== '' )   update_post_meta( $ticket_id, self::META_URL, $url );
